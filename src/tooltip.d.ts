@@ -146,6 +146,7 @@ declare module 'react-native-walkthrough-tooltip' {
 
     // Support for nested elements within the Tooltip component.
     children?: React.ReactNode;
+    arrowBorder?: string;
   }
 
   /**

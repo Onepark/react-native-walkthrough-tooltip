@@ -24,6 +24,7 @@
     "popover"
   ],
   "dependencies": {
+    "lodash.debounce": "^4.0.8",
     "prop-types": "^15.6.1",
     "react-fast-compare": "^2.0.4"
   },

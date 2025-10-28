@@ -1,13 +1,13 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
+import React, { Component } from "react";
+import PropTypes from "prop-types";
 import {
   Dimensions,
   InteractionManager,
   Modal,
   TouchableWithoutFeedback,
   View,
-} from 'react-native';
-import rfcIsEqual from 'react-fast-compare';
+} from "react-native";
+import rfcIsEqual from "react-fast-compare";
 import {
   Point,
   Size,
@@ -19,9 +19,10 @@ import {
   computeBottomGeometry,
   computeLeftGeometry,
   computeRightGeometry,
-} from './geom';
-import styleGenerator from './styles';
-import TooltipChildrenContext from './tooltip-children.context';
+} from "./geom";
+import styleGenerator from "./styles";
+import TooltipChildrenContext from "./tooltip-children.context";
+import { debounce } from "lodash";
 
 export { TooltipChildrenContext };
 
@@ -37,14 +38,14 @@ const computeDisplayInsets = insetsFromProps =>
 
 const invertPlacement = placement => {
   switch (placement) {
-    case 'top':
-      return 'bottom';
-    case 'bottom':
-      return 'top';
-    case 'right':
-      return 'left';
-    case 'left':
-      return 'right';
+    case "top":
+      return "bottom";
+    case "bottom":
+      return "top";
+    case "right":
+      return "left";
+    case "left":
+      return "right";
     default:
       return placement;
   }
@@ -54,7 +55,7 @@ class Tooltip extends Component {
   static defaultProps = {
     allowChildInteraction: true,
     arrowSize: new Size(16, 8),
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: "rgba(0,0,0,0.5)",
     childContentSpacing: 4,
     children: null,
     closeOnChildInteraction: true,
@@ -66,12 +67,12 @@ class Tooltip extends Component {
     isVisible: false,
     onClose: () => {
       console.warn(
-        '[react-native-walkthrough-tooltip] onClose prop not provided',
+        "[react-native-walkthrough-tooltip] onClose prop not provided",
       );
     },
-    placement: 'center', // falls back to "top" if there ARE children
+    placement: "center", // falls back to "top" if there ARE children
     showChildInTooltip: true,
-    supportedOrientations: ['portrait', 'landscape'],
+    supportedOrientations: ["portrait", "landscape"],
     useInteractionManager: false,
     useReactNativeModal: true,
     topAdjustment: 0,
@@ -101,7 +102,7 @@ class Tooltip extends Component {
     disableShadow: PropTypes.bool,
     isVisible: PropTypes.bool,
     onClose: PropTypes.func,
-    placement: PropTypes.oneOf(['top', 'left', 'bottom', 'right', 'center']),
+    placement: PropTypes.oneOf(["top", "left", "bottom", "right", "center"]),
     showChildInTooltip: PropTypes.bool,
     supportedOrientations: PropTypes.arrayOf(PropTypes.string),
     useInteractionManager: PropTypes.bool,
@@ -122,6 +123,8 @@ class Tooltip extends Component {
 
     this.childWrapper = React.createRef();
     this.state = {
+      isVisible: false,
+
       // no need to wait for interactions if not visible initially
       waitingForInteractions: isVisible && useInteractionManager,
       contentSize: new Size(0, 0),
@@ -137,27 +140,31 @@ class Tooltip extends Component {
           ? invertPlacement(props.placement)
           : props.placement,
       measurementsFinished: false,
-      windowDims: Dimensions.get('window'),
+      windowDims: Dimensions.get("window"),
     };
   }
 
   componentDidMount() {
     this.dimensionsSubscription = Dimensions.addEventListener(
-      'change',
+      "change",
       this.updateWindowDims,
     );
   }
 
   componentDidUpdate(prevProps, prevState) {
-    const { content, isVisible, placement } = this.props;
+    const { content, isVisible: isVisibleNextState, placement } = this.props;
     const { displayInsets } = this.state;
 
     const contentChanged = !rfcIsEqual(prevProps.content, content);
     const placementChanged = prevProps.placement !== placement;
-    const becameVisible = isVisible && !prevProps.isVisible;
     const insetsChanged = !rfcIsEqual(prevState.displayInsets, displayInsets);
 
-    if (contentChanged || placementChanged || becameVisible || insetsChanged) {
+    if (
+      contentChanged ||
+      placementChanged ||
+      insetsChanged ||
+      prevProps.isVisible !== isVisibleNextState
+    ) {
       setTimeout(() => {
         this.measureChildRect();
       });
@@ -172,7 +179,7 @@ class Tooltip extends Component {
       this.dimensionsSubscription.remove();
     } else {
       // react native < 0.65.*
-      Dimensions.removeEventListener('change', this.updateWindowDims);
+      Dimensions.removeEventListener("change", this.updateWindowDims);
     }
 
     if (this.interactionPromise) {
@@ -270,7 +277,7 @@ class Tooltip extends Component {
         this.isMeasuringChild = true;
         if (
           this.childWrapper.current &&
-          typeof this.childWrapper.current.measure === 'function'
+          typeof this.childWrapper.current.measure === "function"
         ) {
           this.childWrapper.current.measure(
             (x, y, width, height, pageX, pageY) => {
@@ -317,7 +324,7 @@ class Tooltip extends Component {
       childRect,
       windowDims,
       arrowSize:
-        placement === 'top' || placement === 'bottom'
+        placement === "top" || placement === "bottom"
           ? arrowSize
           : swapSizeDimmensions(arrowSize),
       contentSize,
@@ -328,22 +335,22 @@ class Tooltip extends Component {
 
     // special case for centered, childless placement tooltip
     if (
-      placement === 'center' &&
+      placement === "center" &&
       React.Children.count(this.props.children) === 0
     ) {
       geom = computeCenterGeometry(options);
     } else {
       switch (placement) {
-        case 'bottom':
+        case "bottom":
           geom = computeBottomGeometry(options);
           break;
-        case 'left':
+        case "left":
           geom = computeLeftGeometry(options);
           break;
-        case 'right':
+        case "right":
           geom = computeRightGeometry(options);
           break;
-        case 'top':
+        case "top":
         default:
           break; // computed just above if-else-block
       }
@@ -377,16 +384,16 @@ class Tooltip extends Component {
       <TooltipChildrenContext.Provider value={{ tooltipDuplicate: true }}>
         <View
           onTouchEnd={onTouchEnd}
-          pointerEvents={this.props.allowChildInteraction ? 'box-none' : 'none'}
+          pointerEvents={this.props.allowChildInteraction ? "box-none" : "none"}
           style={[
             {
-              position: 'absolute',
+              position: "absolute",
               height,
               width,
               top: y,
               left: x,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
             },
             this.props.childrenWrapperStyle,
           ]}
@@ -424,6 +431,10 @@ class Tooltip extends Component {
       }
     };
 
+    const arrowPositionStyles = generatedStyles.arrowStyle.find(item => !!item.left && !!item.top) || {
+      left: 0,
+      top: 0,
+    };
     return (
       <TouchableWithoutFeedback
         onPress={onPressBackground}
@@ -432,7 +443,15 @@ class Tooltip extends Component {
         <View style={generatedStyles.containerStyle}>
           <View style={[generatedStyles.backgroundStyle]}>
             <View style={generatedStyles.tooltipStyle}>
-              {hasChildren ? <View style={generatedStyles.arrowStyle} /> : null}
+              {hasChildren ? <View style={[...generatedStyles.arrowStyle, this.props?.arrowBorder && {
+                borderTopColor: this.props?.arrowBorder,
+              }]} /> : null}
+              {this.props?.arrowBorder ? <View style={[...generatedStyles.arrowStyle, {
+                top: arrowPositionStyles.top + 1,
+                width: arrowPositionStyles.width - 1,
+                height: arrowPositionStyles.height + 1,
+                zIndex: 99,
+              }]} /> : null}
               <View
                 onLayout={this.measureContent}
                 style={generatedStyles.contentStyle}
